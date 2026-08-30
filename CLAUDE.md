@@ -22,3 +22,17 @@ Assume the honeypot is hostile ground. Every design decision that touches the ex
 answer: if this process is fully compromised, what does the attacker reach next? Isolation belongs in the
 default path (container, dedicated VLAN, no shared credentials), not in a documentation warning — the
 README already carries that warning for humans.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as markdown files under `.scratch/<feature>/` in this repo. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
