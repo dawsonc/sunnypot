@@ -7,6 +7,22 @@ This project aims to shed light on cybersecurity threats facing DERs by providin
 
 **Warning:** before running this project on any hardware or network that you care about, make sure you fully understand the steps needed to protect that environment (e.g. containerization, network isolation, ...).
 
+## Running it
+
+```sh
+cp sunnypot.example.toml sunnypot.toml   # then fill it in
+cargo run --release -- sunnypot.toml > captures.jsonl
+```
+
+`sunnypot.toml` holds the site's coordinates, the identity the device advertises, and where to
+listen. It is gitignored; `sunnypot.example.toml` documents its shape. The identity values come from
+`docs/adr/0002-impersonate-fronius-primo.md`.
+
+Captures are newline-delimited JSON on stdout — one flat stream, connection and request events
+joined by a shared `connection_id`, so `jq` answers the first month's questions. Redirecting to a
+file is a stopgap for local use: a real deployment ships captures to append-only remote storage the
+honeypot cannot read back or tamper with.
+
 ## Supported devices
 
 Sunnypot can currently emulate the following devices/protocols.

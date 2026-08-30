@@ -1,0 +1,6 @@
+/target
+
+# Deployment config. Carries the site's coordinates, the serial the device advertises, and the
+# storage endpoint — none of which belong in a public repository. See sunnypot.example.toml.
+/sunnypot.toml
+*.local.toml
