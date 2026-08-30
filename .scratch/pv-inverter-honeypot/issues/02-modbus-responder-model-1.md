@@ -112,6 +112,8 @@ Not asserted by any test; revisit if it ever matters.
 not in the spec's two-implementation list; ticket 09 replaces it with the object-storage uploader
 behind the same `CaptureSink` trait.
 
-**Models 120, 121, 122 and 160 are unowned.** Ticket 05's control addresses are only correct if those
-blocks sit between Model 101 and Model 123, and no ticket builds them. Raised as a comment on ticket
-05.
+**Models 120, 121 and 122 were unowned.** Ticket 05's control addresses are only correct if those
+blocks sit between Model 101 and Model 123, and no ticket built them — they are worth 106 registers,
+which is exactly the offset between the ADR's 40228 and where Immediate Controls would otherwise
+land. Now ticket 03a, which 05 is blocked by. Model 160 sits after 123 and shifts nothing that 05
+touches, so it rides along in 03a rather than being load-bearing.

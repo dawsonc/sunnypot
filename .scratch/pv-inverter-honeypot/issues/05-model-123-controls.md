@@ -5,7 +5,7 @@ reported output on the next read; disconnect stops generation entirely. This is 
 thing an attacker can do to a PV inverter over Modbus, and capturing the attempt is the point of the
 whole project.
 
-**Blocked by:** 03.
+**Blocked by:** 03a — the control addresses below are only correct once the Models between 101 and 123 exist.
 
 **Status:** ready-for-agent
 
@@ -18,15 +18,13 @@ whole project.
 
 ## Comments
 
-**Models 120, 121, 122 and 160 are unowned, and this ticket depends on them.** ADR 0002 puts
-Immediate Controls at 40228 *because* Nameplate (120), Basic Settings (121) and Measurements_Status
-(122) sit between Model 101 and Model 123 in the Fronius chain: "Serving only three models puts
-Immediate Controls at 40122 instead of 40228 — every Fronius-aware client and every published
-Fronius register map would then read the wrong registers." The control addresses this ticket must
-honour (40232 `Conn`, 40233 `WMaxLimPct`, 40237 `WMaxLim_Ena`, ...) are only correct if those blocks
-exist and are the right length.
+**The Models this ticket's addresses depend on are ticket 03a.** ADR 0002 puts Immediate Controls at
+40228 *because* Nameplate (120), Basic Settings (121) and Measurements_Status (122) sit between Model
+101 and Model 123: "Serving only three models puts Immediate Controls at 40122 instead of 40228 —
+every Fronius-aware client and every published Fronius register map would then read the wrong
+registers." The addresses here (40232 `Conn`, 40233 `WMaxLimPct`, 40237 `WMaxLim_Ena`, ...) are wrong
+by 106 registers until those blocks exist. `WMaxLimPct` is also a percentage of Model 121's `WMax`,
+which 03a supplies.
 
-Ticket 02 built the chain as far as Common and terminated it; ticket 03 owns Model 101. No ticket
-owns 120/121/122, or the optional 160. Either this ticket grows to serve them as correctly-shaped
-constant blocks, or a ticket between 03 and 05 does — but the addresses here are wrong until
-something does. Raised by the ticket 02 spec review.
+Nothing owned those blocks when this ticket was written; ticket 03a now does. Raised by the ticket 02
+spec review.
