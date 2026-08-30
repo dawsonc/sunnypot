@@ -38,3 +38,9 @@ A SunSpec register-block definition and nothing else (Model 1 common, 101/103 in
 **Surface**:
 One protocol endpoint through which the plant is exposed and observed — the Modbus surface, the
 HTTP surface. A surface serves values; it never owns them.
+
+**Device identity**:
+The one real product sunnypot impersonates — a Fronius Primo 5.0-1 208-240 with an integrated
+Datamanager 2.0 — together with every string, register address, and page a scanner can observe to
+name it. Fixed in ADR 0002; every surface reads it from there rather than deciding for itself.
+_Avoid_: Profile, persona, fingerprint (the fingerprint is what an observer *derives*, not what we set)
