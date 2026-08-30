@@ -9,14 +9,18 @@ This project aims to shed light on cybersecurity threats facing DERs by providin
 
 ## Supported devices
 
-Sunnypot can currently emulate the following devices/protocols
+Sunnypot can currently emulate the following devices/protocols.
+
+- SunSpec via Modbus TCP/IP
+    - Single-phase solar (mimicking residential)
+
+Future development may include...
 
 - SunSpec via Modbus TCP/IP
     - Single-phase solar (mimicking residential)
     - Three-phase solar (mimicking C&I)
     - Storage
-
-The future roadmap includes...
-
 - IEEE 2030.5 via HTTPS REST
 - Others on request (please file a GitHub issue with your request)
+
+For all supported devices/protocols, Sunnypot emulates both the protocol and the physical behavior of the underlying device (e.g. solar output that varies over time).
