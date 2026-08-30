@@ -1,8 +1,13 @@
-//! Standard SunSpec discovery, driven by a third-party Modbus client library.
+//! Walking the SunSpec model chain with a third-party Modbus client.
 //!
-//! The other tests speak raw bytes. This one deliberately does not: the question it answers is
-//! whether an off-the-shelf client, doing what every scanner does, finds the model chain without
-//! special-casing sunnypot.
+//! The other tests speak raw bytes, which means they check our encoder against our own decoder.
+//! This one puts `tokio-modbus` in between, so the framing sunnypot emits is read back by code that
+//! knows nothing about it.
+//!
+//! What this does *not* do is run a real SunSpec discovery implementation: the chain walk below is
+//! written out by hand, and tokio-modbus contributes framing only. It shows that the chain is
+//! traversable by the standard algorithm, not that a particular scanner's implementation succeeds.
+//! Confirming that against a real client is ticket 11's job.
 
 mod support;
 

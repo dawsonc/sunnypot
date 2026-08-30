@@ -40,7 +40,7 @@ async fn the_common_block_serves_the_identity_from_config() {
     assert_eq!(sunspec_string(&body[0..16]), "Testvendor", "Mn");
     assert_eq!(
         sunspec_string(&body[16..32]),
-        "Testmodel 5.0-1 208-240",
+        "Testproduct 5.0-1 208-240",
         "Md"
     );
     assert_eq!(sunspec_string(&body[32..40]), "3.28.1-3", "Opt");

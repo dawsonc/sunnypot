@@ -45,6 +45,12 @@ pub struct Frame {
 }
 
 impl Frame {
+    /// The function code the PDU carries. An empty PDU has none; `0` is not a valid function code,
+    /// so it reads as "nothing was asked for" in the corpus.
+    pub fn function_code(&self) -> u8 {
+        self.pdu.first().copied().unwrap_or(0)
+    }
+
     /// A response frame that echoes the request's routing fields, as the protocol requires.
     pub fn reply_to(request: &Frame, pdu: Vec<u8>) -> Self {
         Self {
@@ -135,17 +141,18 @@ impl Request {
             _ => Request::UnsupportedFunction,
         }
     }
-
-    /// The register range the request names, for the capture record.
-    pub fn range(&self) -> (Option<u16>, Option<u16>) {
-        match self {
-            Request::ReadHoldingRegisters { start, quantity } => (Some(*start), Some(*quantity)),
-            _ => (None, None),
-        }
-    }
 }
 
+/// # Panics (debug only)
+///
+/// The byte count is one byte wide, so a caller must have already rejected quantities above
+/// [`MAX_READ_QUANTITY`]. The assertion pins that invariant here, where the cast is.
 pub fn encode_read_response(registers: &[u16]) -> Vec<u8> {
+    debug_assert!(
+        registers.len() <= MAX_READ_QUANTITY as usize,
+        "response of {} registers cannot state its own byte count",
+        registers.len()
+    );
     let mut pdu = Vec::with_capacity(2 + registers.len() * 2);
     pdu.push(FC_READ_HOLDING_REGISTERS);
     pdu.push((registers.len() * 2) as u8);

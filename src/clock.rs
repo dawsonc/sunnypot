@@ -40,10 +40,6 @@ impl FixedClock {
         let mut now = self.now.lock().expect("clock lock");
         *now += by;
     }
-
-    pub fn set(&self, to: DateTime<Utc>) {
-        *self.now.lock().expect("clock lock") = to;
-    }
 }
 
 impl Clock for FixedClock {

@@ -10,26 +10,48 @@ pub mod registers;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::capture::{
-    CaptureSink, ConnectionClosed, ConnectionOpened, Event, ModbusRequest, Surface,
+    CaptureSink, ConnectionClosed, ConnectionOpened, Event, EventKind, ModbusRequest, Surface,
 };
 use crate::clock::Clock;
 use crate::config::Config;
 
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD as BASE64;
 use frame::{ExceptionCode, Frame, Request};
 use registers::RegisterMap;
+
+/// One peer's session, and the identity that joins everything it did in the corpus.
+struct Connection {
+    id: String,
+    peer: String,
+    local_port: u16,
+}
+
+impl Connection {
+    fn accept(peer: SocketAddr, local_port: u16) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            peer: peer.to_string(),
+            local_port,
+        }
+    }
+}
 
 pub struct ModbusSurface {
     registers: RegisterMap,
     clock: Arc<dyn Clock>,
     sink: Arc<dyn CaptureSink>,
+    /// Bounds how many peers can hold a socket open at once.
+    permits: Arc<Semaphore>,
+    idle_timeout: Duration,
 }
 
 impl ModbusSurface {
@@ -38,50 +60,78 @@ impl ModbusSurface {
             registers: RegisterMap::new(&config.identity),
             clock,
             sink,
+            permits: Arc::new(Semaphore::new(config.modbus.max_connections)),
+            idle_timeout: config.modbus.idle_timeout(),
         }
     }
 
     /// Accept forever. One task per connection; a failing connection never takes the listener down.
-    pub async fn serve(self: Arc<Self>, listener: TcpListener) {
-        let local_port = match listener.local_addr() {
-            Ok(addr) => addr.port(),
-            Err(_) => 0,
-        };
+    ///
+    /// `local_port` is passed in rather than read back off the listener, so a record in the corpus
+    /// can never carry a placeholder port.
+    pub async fn serve(self: Arc<Self>, listener: TcpListener, local_port: u16) {
         loop {
-            match listener.accept().await {
-                Ok((stream, peer)) => {
+            let Ok((stream, peer)) = listener.accept().await else {
+                // Accept errors are per-connection (fd limits, a peer that vanished between SYN and
+                // accept). Keep listening.
+                continue;
+            };
+
+            let connection = Connection::accept(peer, local_port);
+            match Arc::clone(&self.permits).try_acquire_owned() {
+                Ok(permit) => {
                     let surface = Arc::clone(&self);
                     tokio::spawn(async move {
-                        surface.handle_connection(stream, peer, local_port).await;
+                        surface.handle_connection(stream, connection).await;
+                        drop(permit);
                     });
                 }
                 Err(_) => {
-                    // Accept errors are per-connection (fd limits, a peer that vanished between
-                    // SYN and accept). Keep listening.
-                    continue;
+                    // At the cap. Refuse, but still record the attempt: a peer opening more
+                    // connections than the device will hold is itself an observation.
+                    self.record_refusal(&connection);
                 }
             }
         }
     }
 
-    async fn handle_connection(&self, mut stream: TcpStream, peer: SocketAddr, local_port: u16) {
-        let connection_id = Uuid::new_v4().to_string();
-        let peer = peer.to_string();
-        let opened_at = self.clock.now();
-
+    fn record(&self, connection: &Connection, kind: impl Into<EventKind>) {
         self.sink.record(Event::new(
             &*self.clock,
-            &connection_id,
+            &connection.id,
             Surface::Modbus,
-            ConnectionOpened {
-                peer: peer.clone(),
-                local_port,
-            },
+            kind,
         ));
+    }
+
+    fn opened(connection: &Connection) -> ConnectionOpened {
+        ConnectionOpened {
+            peer: connection.peer.clone(),
+            local_port: connection.local_port,
+        }
+    }
+
+    fn record_refusal(&self, connection: &Connection) {
+        self.record(connection, Self::opened(connection));
+        self.record(
+            connection,
+            ConnectionClosed {
+                peer: connection.peer.clone(),
+                local_port: connection.local_port,
+                duration_ms: 0,
+                requests: 0,
+                error: Some("at the connection limit".to_owned()),
+            },
+        );
+    }
+
+    async fn handle_connection(&self, mut stream: TcpStream, connection: Connection) {
+        let opened_at = self.clock.now();
+        self.record(&connection, Self::opened(&connection));
 
         let mut requests = 0u64;
         let error = self
-            .converse(&mut stream, &peer, &connection_id, &mut requests)
+            .converse(&mut stream, &connection, &mut requests)
             .await
             .err();
 
@@ -89,38 +139,39 @@ impl ModbusSurface {
         let _ = stream.shutdown().await;
 
         let duration_ms = (self.clock.now() - opened_at).num_milliseconds().max(0) as u64;
-        self.sink.record(Event::new(
-            &*self.clock,
-            &connection_id,
-            Surface::Modbus,
+        self.record(
+            &connection,
             ConnectionClosed {
-                peer,
-                local_port,
+                peer: connection.peer.clone(),
+                local_port: connection.local_port,
                 duration_ms,
                 requests,
                 error,
             },
-        ));
+        );
     }
 
-    /// Read requests until the peer goes away. `Err` carries the reason the conversation ended
-    /// badly, for the close event.
+    /// Read requests until the peer goes away or goes quiet. `Err` carries the reason the
+    /// conversation ended badly, for the close event.
     async fn converse(
         &self,
         stream: &mut TcpStream,
-        peer: &str,
-        connection_id: &str,
+        connection: &Connection,
         requests: &mut u64,
     ) -> Result<(), String> {
         loop {
-            let request = match frame::read_frame(stream).await {
-                Ok(Some(frame)) => frame,
-                Ok(None) => return Ok(()),
-                Err(err) => return Err(err.to_string()),
+            let read = tokio::time::timeout(self.idle_timeout, frame::read_frame(stream));
+            let request = match read.await {
+                Ok(Ok(Some(frame))) => frame,
+                Ok(Ok(None)) => return Ok(()),
+                Ok(Err(err)) => return Err(err.to_string()),
+                Err(_) => {
+                    return Err(format!("idle for {} seconds", self.idle_timeout.as_secs()));
+                }
             };
             *requests += 1;
 
-            let response = self.respond(&request, peer, connection_id);
+            let response = self.respond(&request, connection);
 
             if let Err(err) = stream.write_all(&response.encode()).await {
                 return Err(err.to_string());
@@ -129,37 +180,35 @@ impl ModbusSurface {
     }
 
     /// Answer one request, and record what was asked and what came back.
-    fn respond(&self, request: &Frame, peer: &str, connection_id: &str) -> Frame {
-        let parsed = Request::parse(&request.pdu);
-        let function_code = request.pdu.first().copied().unwrap_or(0);
+    fn respond(&self, request: &Frame, connection: &Connection) -> Frame {
+        let function_code = request.function_code();
 
-        let outcome = match parsed {
-            Request::ReadHoldingRegisters { start, quantity } => self
-                .registers
-                .read(start, quantity)
-                .map(frame::encode_read_response),
-            Request::UnsupportedFunction => Err(ExceptionCode::IllegalFunction),
-            Request::MalformedPayload => Err(ExceptionCode::IllegalDataValue),
+        // One match over the parsed request: what to answer, and what range to record.
+        let (outcome, start_address, quantity) = match Request::parse(&request.pdu) {
+            Request::ReadHoldingRegisters { start, quantity } => (
+                self.registers
+                    .read(start, quantity)
+                    .map(frame::encode_read_response),
+                Some(start),
+                Some(quantity),
+            ),
+            Request::UnsupportedFunction => (Err(ExceptionCode::IllegalFunction), None, None),
+            Request::MalformedPayload => (Err(ExceptionCode::IllegalDataValue), None, None),
         };
 
-        let (start_address, quantity) = parsed.range();
-        let exception_code = outcome.as_ref().err().map(|code| code.as_u8());
-
-        self.sink.record(Event::new(
-            &*self.clock,
-            connection_id,
-            Surface::Modbus,
+        self.record(
+            connection,
             ModbusRequest {
-                peer: peer.to_owned(),
+                peer: connection.peer.clone(),
                 transaction_id: request.transaction_id,
                 unit_id: request.unit_id,
                 function_code,
                 start_address,
                 quantity,
                 pdu: BASE64.encode(&request.pdu),
-                exception_code,
+                exception_code: outcome.as_ref().err().map(|code| code.as_u8()),
             },
-        ));
+        );
 
         let pdu = match outcome {
             Ok(pdu) => pdu,

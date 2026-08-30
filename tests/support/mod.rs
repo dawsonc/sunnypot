@@ -25,7 +25,7 @@ inverter_rating_kw = 5.0
 
 [identity]
 manufacturer = "Testvendor"
-model = "Testmodel 5.0-1 208-240"
+product = "Testproduct 5.0-1 208-240"
 options = "3.28.1-3"
 version = "1.19.10-0"
 serial = "30514231"
@@ -34,6 +34,18 @@ device_address = 1
 [modbus]
 bind = "127.0.0.1:0"
 "#;
+
+/// The test config with extra keys appended to its `[modbus]` section, which is last.
+pub fn test_config_with_modbus(extra: &str) -> String {
+    format!("{TEST_CONFIG}{extra}\n")
+}
+
+/// The committed example, bound to an ephemeral loopback port instead of 0.0.0.0:502.
+pub fn example_config() -> String {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/sunnypot.example.toml");
+    let text = std::fs::read_to_string(path).expect("the example config is committed");
+    text.replace(r#"bind = "0.0.0.0:502""#, r#"bind = "127.0.0.1:0""#)
+}
 
 pub struct TestApp {
     app: App,

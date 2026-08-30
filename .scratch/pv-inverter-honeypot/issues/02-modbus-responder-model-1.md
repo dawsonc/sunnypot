@@ -27,15 +27,24 @@ corpus as an open event, one event per request, and a close event, all sharing a
 **The seam.** `App::bind(config, clock, sink)` binds every surface and returns once the ports are
 bound, so a test that asks for port 0 can read back what it got (`src/app.rs`). Nothing else is
 substitutable: the clock (`src/clock.rs`) and the capture sink (`src/capture.rs`) are the only two
-doubles, exactly as the spec allows. All 15 tests drive real TCP over loopback and assert on returned
-bytes or on captured events.
+doubles, exactly as the spec allows. 20 tests; 15 of them drive real Modbus/TCP over loopback and
+assert only on returned bytes or on captured events. The other five are in `tests/config.rs` and
+exercise `Config::from_toml_str`'s error contract directly, because a config that fails to load
+cannot be observed at the seam at all. The one config test that *can* run through the seam does:
+`the_committed_example_serves_a_coherent_device` starts an app from the committed example and reads
+the identity back off the wire.
 
 **Register map.** `src/modbus/registers.rs`, typed and in code. `SunS` at protocol address 40000,
 then Common (id 1, length **65** — the Fronius length, not the textbook 66), then the `0xFFFF`
-terminator at 40069. `tests/sunspec_discovery.rs` walks the chain with `tokio-modbus`, a third-party
-client, rather than with our own framing code: the question that test answers is whether standard
-discovery logic finds the chain without special-casing, which our own encoder could not honestly
-answer. The walk lands exactly on the terminator, so no model is misaligned.
+terminator at 40069. Addresses are 0-based on the wire; the ADR's tables are 1-based, and the module
+documents the reconciliation.
+
+**Chain traversal.** `tests/sunspec_discovery.rs` walks the chain through `tokio-modbus`, so the
+framing sunnypot emits is read back by code that knows nothing about it rather than by our own
+decoder. It does not run a real SunSpec discovery implementation — the walk is written out by hand,
+and the library contributes framing only. It shows the chain is traversable by the standard
+algorithm and lands exactly on the terminator, so no model is misaligned; confirming a real
+scanner's implementation is ticket 11.
 
 **Framing.** Hand-written (`src/modbus/frame.rs`), per the spec — the published crates are
 client-shaped, and a honeypot needs to control exactly which byte it returns for input a real client
@@ -52,10 +61,17 @@ pins the wire format, including that `exception_code` is absent rather than null
 filters read cleanly. The raw request PDU is base64-inlined on every request event — for function
 codes sunnypot does not parse, it is the only evidence of what was attempted.
 
+**Resource limits** (`tests/modbus_limits.rs`). The surface caps concurrent connections and closes a
+peer that holds a socket without completing a request; both are config, defaulting to 256 and 120
+seconds. A refused connection is still recorded, with `error: "at the connection limit"` — a peer
+exhausting the limit is itself an observation. Without these, a peer that opens sockets and sends
+seven bytes each walks the process to fd exhaustion, which `CLAUDE.md` puts in the default path
+rather than in a warning.
+
 **Config.** `sunnypot.toml`, gitignored, with `sunnypot.example.toml` committed. Unknown keys are
-rejected rather than ignored, so a typo is not a silently-ignored setting. Identity strings are
-checked against their SunSpec field widths at load: a string too long would be truncated on the
-wire, which is invisible locally and obvious to a scanner.
+rejected rather than ignored. Identity strings are checked against their SunSpec field widths at
+load, and empty ones are refused: a string too long would be truncated on the wire and an empty one
+would serve an all-zero Common block — both invisible locally and obvious to a scanner.
 
 ## Comments
 
@@ -67,24 +83,35 @@ here.
 Windows trees out of a static build), uuid, base64, thiserror. `tokio-modbus` is a **dev**-dependency
 only — it never enters the shipped binary.
 
+**The identity field is `product`, not `model`.** `CONTEXT.md` reserves *Model* for a SunSpec
+register-block definition "and nothing else", and ADR 0002's device table calls this field `Product`.
+It still serves SunSpec `Md`.
+
+**The example config carries the ADR's identity, not blanks.** The manufacturer, product, options and
+version are the same for every deployment and are public in ADR 0002, so a fresh checkout serves a
+coherent device rather than an all-zero Common block. Only the deployment-specific values — serial,
+latitude, longitude, timezone — are placeholders, and they are marked `FILL IN`. This is a slightly
+looser reading of "documenting shape but not values" than the checkbox implies; the alternative left
+the ticket 01 decision reachable only from ADR prose, which both reviews flagged.
+
 **Register addresses are 0-based on the wire.** The ADR tabulates the identifier at 40001, as vendor
 register maps do; that is the 1-based reference for protocol address 40000, which is what standard
-SunSpec discovery probes. `src/modbus/registers.rs` documents the mapping. Worth confirming against a
-real Fronius banner in ticket 11, since a one-register offset would break every client.
+SunSpec discovery probes. Worth confirming against a real Fronius banner in ticket 11, since a
+one-register offset would break every client.
 
-**Sunnypot answers any unit id and echoes it back.** A real Datamanager is addressed as unit 1
-(`DA = 1`), but refusing other unit ids would turn a scanner's unit-id sweep into silence. Answering
-maximises engagement, which is the point. Flagged here rather than hidden: if ticket 11 finds this
-reads as non-Fronius, restrict it.
+**Sunnypot answers any unit id and echoes it back**, where the ADR documents unit ID 1. Refusing other
+unit ids would turn a scanner's unit-id sweep into silence, and engagement is the point. This is a
+knowing deviation from the documented device, so it is recorded in ADR 0002's Consequences rather
+than only here.
 
 **Non-zero MBAP protocol ids are answered, not refused.** Strictly, protocol id 0 means Modbus.
 Sunnypot echoes whatever it is given and answers anyway, on the same keep-them-talking reasoning.
 Not asserted by any test; revisit if it ever matters.
 
-**The binary writes captures to stdout.** `StdoutSink` is what makes the binary runnable now;
-ticket 09 replaces it with the object-storage uploader behind the same `CaptureSink` trait.
+**The binary writes captures to stdout.** `StdoutSink` is what makes the binary runnable now and is
+not in the spec's two-implementation list; ticket 09 replaces it with the object-storage uploader
+behind the same `CaptureSink` trait.
 
-**The example config carries empty identity strings**, per this ticket's "shape but not values".
-A deployment that never fills them in would serve an all-zero Common block — config load does not
-reject that, since any non-empty placeholder that passed a check would defeat it. Ticket 11's
-external fingerprint check is what catches an unfilled config.
+**Models 120, 121, 122 and 160 are unowned.** Ticket 05's control addresses are only correct if those
+blocks sit between Model 101 and Model 123, and no ticket builds them. Raised as a comment on ticket
+05.

@@ -1,30 +1,38 @@
 # Sunnypot deployment configuration.
 #
 # Copy to `sunnypot.toml` and fill in. That file is gitignored: publishing this repository must not
-# leak a deployment. The values below document shape only — every one of them is a placeholder.
+# leak a deployment.
 #
-# The identity strings belong to the impersonated product and are recorded, with their sources and
-# confidence, in docs/adr/0002-impersonate-fronius-primo.md. Read that before changing them.
+# The identity below is the product sunnypot impersonates, fixed in
+# docs/adr/0002-impersonate-fronius-primo.md — those values are the same for every deployment and
+# are reproduced here so a fresh checkout serves a coherent device. The values marked FILL IN are
+# deployment-specific and are placeholders: sunnypot will run with them, but the device it presents
+# will not match where it is actually installed.
 
 # The physical installation the plant models. Latitude and longitude must match where the
 # deployment's IP geolocates, or solar noon lands at the wrong wall-clock time for anyone checking.
 [site]
-latitude = 0.0                 # decimal degrees, north positive
-longitude = 0.0                # decimal degrees, east positive
-timezone = "UTC"               # IANA name, e.g. "America/New_York"
-array_capacity_kw = 0.0        # DC nameplate; size for a 1.2-1.3 DC:AC ratio against the inverter
-inverter_rating_kw = 0.0       # AC nameplate
+latitude = 0.0                 # FILL IN — decimal degrees, north positive
+longitude = 0.0                # FILL IN — decimal degrees, east positive
+timezone = "UTC"               # FILL IN — IANA name, e.g. "America/New_York"
+array_capacity_kw = 6.2        # DC nameplate; sized for a 1.2-1.3 DC:AC ratio against the inverter
+inverter_rating_kw = 5.0       # AC nameplate
 
 # What a scanner reads out of the SunSpec Common block. Field widths are fixed by SunSpec and
-# enforced at load: manufacturer, model and serial hold 32 bytes, options and version 16.
+# enforced at load: manufacturer, product and serial hold 32 bytes, options and version 16. None of
+# them may be empty — an all-zero Common block is a config nobody filled in, not a device.
 [identity]
-manufacturer = ""              # Mn
-model = ""                     # Md
-options = ""                   # Opt — datalogger firmware version
-version = ""                   # Vr — inverter firmware version
-serial = ""                    # SN — must NOT be copied from a real unit: a real serial would
-                               #      misattribute sunnypot's traffic to a real owner's device
-device_address = 1             # DA — the Modbus device address the identity advertises
+manufacturer = "Fronius"               # Mn
+product = "Primo 5.0-1 208-240"        # Md — ADR 0002 calls this Product; "Model" means a SunSpec
+                                       #      register block and nothing else
+options = "3.28.1-3"                   # Opt — datalogger firmware version
+version = "1.19.10-0"                  # Vr — inverter firmware version
+serial = "00000000"                    # FILL IN — 8 numeric digits. Must NOT be copied from a real
+                                       #      unit: a real serial would misattribute sunnypot's
+                                       #      traffic to a real owner's device
+device_address = 1                     # DA — the Modbus device address the identity advertises
 
 [modbus]
 bind = "0.0.0.0:502"           # 502 needs a capability or a port forward; see the deployment notes
+max_connections = 256          # optional — concurrent connections held before new ones are refused
+idle_timeout_secs = 120        # optional — how long a peer may hold a socket without speaking

@@ -46,7 +46,7 @@ impl RegisterMap {
         registers.push(MODEL_COMMON);
         registers.push(COMMON_LENGTH);
         push_string(&mut registers, &identity.manufacturer, STRING32_REGISTERS);
-        push_string(&mut registers, &identity.model, STRING32_REGISTERS);
+        push_string(&mut registers, &identity.product, STRING32_REGISTERS);
         push_string(&mut registers, &identity.options, STRING16_REGISTERS);
         push_string(&mut registers, &identity.version, STRING16_REGISTERS);
         push_string(&mut registers, &identity.serial, STRING32_REGISTERS);

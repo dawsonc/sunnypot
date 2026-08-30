@@ -240,6 +240,12 @@ identity is described so that nobody is tempted to unpack a firmware image to ge
 - **Three fields are unverified** (`Md`, `Vr`, and inverter Model 101 vs 102). Ticket 11 gates
   collection on external classification; confirm these against a real banner sample before the clock
   starts, and reopen this ADR rather than patching values downstream.
+- **Sunnypot answers every Modbus unit id, not only unit 1.** The identity above advertises
+  `DA = 1`, and the chain is documented as unit ID 1. The implementation (ticket 02) deliberately
+  answers whatever unit id it is asked for and echoes it back, because refusing other unit ids turns
+  a scanner's unit-id sweep into silence, and engagement is the point of the exercise. Recorded here
+  rather than left in the code: this is the one place where the served device knowingly differs from
+  the documented one. If ticket 11 finds it reads as non-Fronius, restrict it and amend this bullet.
 - **If storage is ever added**, this identity does not stretch. A Fronius Symo Hybrid is a different
   product with a different fingerprint and Model 124 — a new ADR, not an edit to this one.
 

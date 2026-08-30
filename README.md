@@ -19,7 +19,9 @@ listen. It is gitignored; `sunnypot.example.toml` documents its shape. The ident
 `docs/adr/0002-impersonate-fronius-primo.md`.
 
 Captures are newline-delimited JSON on stdout — one flat stream, connection and request events
-joined by a shared `connection_id`, so `jq` answers the first month's questions.
+joined by a shared `connection_id`, so `jq` answers the first month's questions. Redirecting to a
+file is a stopgap for local use: a real deployment ships captures to append-only remote storage the
+honeypot cannot read back or tamper with.
 
 ## Supported devices
 

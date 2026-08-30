@@ -53,7 +53,6 @@ impl Event {
 #[serde(rename_all = "snake_case")]
 pub enum Surface {
     Modbus,
-    Http,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

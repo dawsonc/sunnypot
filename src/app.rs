@@ -32,7 +32,7 @@ impl App {
         let modbus_addr = listener.local_addr()?;
 
         let modbus = Arc::new(ModbusSurface::new(&config, clock, sink));
-        let task = tokio::spawn(modbus.serve(listener));
+        let task = tokio::spawn(modbus.serve(listener, modbus_addr.port()));
 
         Ok(Self {
             modbus_addr,
