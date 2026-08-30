@@ -1,0 +1,17 @@
+[package]
+name = "sunnypot"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+base64 = "0.23.1"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std", "serde"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "net", "macros", "io-util", "time", "sync"] }
+toml = "1.1.4"
+uuid = { version = "1.26.0", features = ["v4"] }
+
+[dev-dependencies]
+tokio-modbus = { version = "0.17.0", default-features = false, features = ["tcp"] }

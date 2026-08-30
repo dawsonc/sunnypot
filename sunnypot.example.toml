@@ -1,0 +1,30 @@
+# Sunnypot deployment configuration.
+#
+# Copy to `sunnypot.toml` and fill in. That file is gitignored: publishing this repository must not
+# leak a deployment. The values below document shape only — every one of them is a placeholder.
+#
+# The identity strings belong to the impersonated product and are recorded, with their sources and
+# confidence, in docs/adr/0002-impersonate-fronius-primo.md. Read that before changing them.
+
+# The physical installation the plant models. Latitude and longitude must match where the
+# deployment's IP geolocates, or solar noon lands at the wrong wall-clock time for anyone checking.
+[site]
+latitude = 0.0                 # decimal degrees, north positive
+longitude = 0.0                # decimal degrees, east positive
+timezone = "UTC"               # IANA name, e.g. "America/New_York"
+array_capacity_kw = 0.0        # DC nameplate; size for a 1.2-1.3 DC:AC ratio against the inverter
+inverter_rating_kw = 0.0       # AC nameplate
+
+# What a scanner reads out of the SunSpec Common block. Field widths are fixed by SunSpec and
+# enforced at load: manufacturer, model and serial hold 32 bytes, options and version 16.
+[identity]
+manufacturer = ""              # Mn
+model = ""                     # Md
+options = ""                   # Opt — datalogger firmware version
+version = ""                   # Vr — inverter firmware version
+serial = ""                    # SN — must NOT be copied from a real unit: a real serial would
+                               #      misattribute sunnypot's traffic to a real owner's device
+device_address = 1             # DA — the Modbus device address the identity advertises
+
+[modbus]
+bind = "0.0.0.0:502"           # 502 needs a capability or a port forward; see the deployment notes
